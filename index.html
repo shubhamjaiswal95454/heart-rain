@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebFXGen - Love Rain</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;900&family=Poppins:wght@300;600&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #05000a;
+            font-family: 'Poppins', sans-serif;
+            color: white;
+            user-select: none;
+        }
+
+        .brand-font { font-family: 'Orbitron', sans-serif; }
+
+        /* Compact Settings Box */
+        .settings-box {
+            background: #0f0514; /* Solid Deep Purple/Black - Non-transparent */
+            border: 1px solid rgba(255, 100, 150, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.9);
+            border-radius: 12px;
+            width: 240px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .settings-box.minimized {
+            height: 48px; /* Only show header */
+            background: #0f0514; /* Solid Color */
+        }
+
+        .settings-content {
+            opacity: 1;
+            transition: opacity 0.2s;
+        }
+
+        .settings-box.minimized .settings-content {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Toggle Arrow */
+        .toggle-icon {
+            transition: transform 0.3s;
+        }
+        .settings-box.minimized .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 8px 0;
+        }
+        input[type=range]::-webkit-slider-track {
+            width: 100%;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: #ff0055;
+            cursor: pointer;
+            margin-top: -5px;
+            box-shadow: 0 0 8px #ff0055;
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .ui-layer {
+            position: relative;
+            z-index: 10;
+        }
+        
+        .title-glow {
+            text-shadow: 0 0 20px rgba(255, 0, 85, 0.8), 0 0 40px rgba(255, 0, 85, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Layer -->
+    <div class="ui-layer absolute inset-0 pointer-events-none p-6 flex flex-col justify-between">
+        
+        <!-- Header (Top Left) -->
+        <header class="pointer-events-auto">
+            <h1 class="brand-font text-2xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 title-glow">
+                WebFXGen
+            </h1>
+            <p class="text-pink-200 text-[10px] tracking-widest opacity-80 mt-1 uppercase">Interactive Engine v2.1</p>
+        </header>
+
+        <!-- Compact Settings Box (Bottom Left) -->
+        <div id="settings-box" class="settings-box pointer-events-auto mb-2">
+            <!-- Header / Toggle Area -->
+            <div class="flex items-center justify-between p-3 cursor-pointer hover:bg-white/5 transition-colors" onclick="toggleSettings()">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-sliders-h text-pink-500 text-sm"></i>
+                    <span class="text-xs font-bold text-gray-200 uppercase tracking-wide">Controls</span>
+                </div>
+                <i id="toggle-icon" class="fas fa-chevron-down text-gray-400 text-xs toggle-icon"></i>
+            </div>
+
+            <!-- Sliders -->
+            <div class="settings-content px-4 pb-4 space-y-4">
+                <!-- Rain Speed -->
+                <div>
+                    <div class="flex justify-between text-[10px] font-semibold text-gray-400 mb-1">
+                        <span>Rain Velocity</span>
+                    </div>
+                    <!-- CHANGED: Default value reduced from 2 to 0.8 -->
+                    <input type="range" min="0" max="8" step="0.1" value="0.8" id="rain-slider">
+                </div>
+
+                <!-- Heart Beat -->
+                <div>
+                    <div class="flex justify-between text-[10px] font-semibold text-gray-400 mb-1">
+                        <span>Pulse Intensity</span>
+                    </div>
+                    <input type="range" min="0.5" max="4" step="0.1" value="1.5" id="beat-slider">
+                </div>
+                
+                <div class="text-[9px] text-gray-600 text-center pt-1 border-t border-white/5">
+                    Rotation Locked
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- UI LOGIC ---
+        function toggleSettings() {
+            const box = document.getElementById('settings-box');
+            box.classList.toggle('minimized');
+        }
+
+        // --- THREE.JS CONFIGURATION ---
+        const config = {
+            rainCount: 2000,
+            rainSpeed: 0.8, // CHANGED: Slower default speed
+            heartBeatSpeed: 1.5,
+            colors: [0xff0055, 0xff00aa, 0xaa00ff, 0xffaa00, 0x00aaff]
+        };
+
+        let scene, camera, renderer;
+        let rainSystem, centralHeartMesh;
+        let time = 0;
+
+        // DOM Elements
+        const rainSlider = document.getElementById('rain-slider');
+        const beatSlider = document.getElementById('beat-slider');
+
+        init();
+        animate();
+
+        function init() {
+            // 1. Setup Scene
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x05000a, 0.0015);
+
+            // Add Lights for the solid mesh
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 1);
+            pointLight.position.set(50, 50, 200);
+            scene.add(pointLight);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 3000);
+            camera.position.z = 600;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // 2. Resources
+            const heartTexture = createHeartTexture();
+
+            // 3. Systems
+            createRain(heartTexture);
+            createSolidHeart();
+
+            // 4. Events
+            window.addEventListener('resize', onWindowResize);
+            
+            // UI Listeners
+            rainSlider.addEventListener('input', (e) => config.rainSpeed = parseFloat(e.target.value));
+            beatSlider.addEventListener('input', (e) => config.heartBeatSpeed = parseFloat(e.target.value));
+        }
+
+        // --- TEXTURE GENERATOR ---
+        function createHeartTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(32, 20);
+            ctx.bezierCurveTo(32, 17, 28, 5, 16, 5);
+            ctx.bezierCurveTo(0, 5, 0, 25.5, 0, 25.5);
+            ctx.bezierCurveTo(0, 40, 16, 52, 32, 60);
+            ctx.bezierCurveTo(48, 52, 64, 40, 64, 25.5);
+            ctx.bezierCurveTo(64, 25.5, 64, 5, 48, 5);
+            ctx.bezierCurveTo(38, 5, 32, 17, 32, 20);
+            ctx.fill();
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- RAIN SYSTEM ---
+        function createRain(texture) {
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const velocities = [];
+            const colors = [];
+            const colorObj = new THREE.Color();
+
+            for (let i = 0; i < config.rainCount; i++) {
+                const x = (Math.random() * 2000) - 1000;
+                const y = (Math.random() * 2000) - 1000;
+                const z = (Math.random() * 1500) - 1000;
+
+                positions.push(x, y, z);
+                velocities.push(1 + Math.random());
+
+                const hex = config.colors[Math.floor(Math.random() * config.colors.length)];
+                colorObj.setHex(hex);
+                colors.push(colorObj.r, colorObj.g, colorObj.b);
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setAttribute('velocity', new THREE.Float32BufferAttribute(velocities, 1));
+
+            const material = new THREE.PointsMaterial({
+                map: texture,
+                size: 15,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            rainSystem = new THREE.Points(geometry, material);
+            scene.add(rainSystem);
+        }
+
+        // --- SOLID HEART MESH ---
+        function createSolidHeart() {
+            const x = 0, y = 0;
+            const heartShape = new THREE.Shape();
+
+            // Create Heart Shape Path
+            heartShape.moveTo( x + 5, y + 5 );
+            heartShape.bezierCurveTo( x + 5, y + 5, x + 4, y, x, y );
+            heartShape.bezierCurveTo( x - 6, y, x - 6, y + 7, x - 6, y + 7 );
+            heartShape.bezierCurveTo( x - 6, y + 11, x - 3, y + 15.4, x + 5, y + 19 );
+            heartShape.bezierCurveTo( x + 12, y + 15.4, x + 16, y + 11, x + 16, y + 7 );
+            heartShape.bezierCurveTo( x + 16, y + 7, x + 16, y, x + 10, y );
+            heartShape.bezierCurveTo( x + 7, y, x + 5, y + 5, x + 5, y + 5 );
+
+            // Extrude to make it 3D - Increased thickness and bevel for a "puffy" look
+            const extrudeSettings = { 
+                depth: 8,            // Much thicker depth (was 4)
+                bevelEnabled: true, 
+                bevelSegments: 5,    // Smoother edges
+                steps: 2, 
+                bevelSize: 2,        // Rounder edges
+                bevelThickness: 2    // Rounder edges
+            };
+            
+            const geometry = new THREE.ExtrudeGeometry( heartShape, extrudeSettings );
+            
+            // Center geometry so it beats from the middle
+            geometry.center();
+
+            // Switch to MeshStandardMaterial for a physical, solid look (not glassy)
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0xdc143c,     // Crimson Red
+                roughness: 0.4,      // Not too shiny, looks like plastic
+                metalness: 0.1,      // Slight reflection
+                emissive: 0x220000,  // Subtle self-illumination to prevent pitch black shadows
+                transparent: false,  // 100% Solid
+                opacity: 1.0,
+                side: THREE.DoubleSide
+            });
+
+            centralHeartMesh = new THREE.Mesh( geometry, material );
+            
+            // Adjust Orientation and Size
+            centralHeartMesh.rotation.z = Math.PI; // Flip upright
+            centralHeartMesh.scale.set(12, 12, 12); // Slightly adjusted scale for the thicker geometry
+            
+            scene.add( centralHeartMesh );
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- ANIMATION ---
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+
+            // 1. Rain Animation
+            if (rainSystem) {
+                const positions = rainSystem.geometry.attributes.position.array;
+                const velocities = rainSystem.geometry.attributes.velocity.array;
+
+                for (let i = 0; i < config.rainCount; i++) {
+                    const idx = i * 3;
+                    positions[idx + 1] -= (config.rainSpeed * velocities[i]);
+
+                    if (positions[idx + 1] < -1000) {
+                        positions[idx + 1] = 1000;
+                        positions[idx] = (Math.random() * 2000) - 1000;
+                        positions[idx + 2] = (Math.random() * 1500) - 1000;
+                    }
+                }
+                rainSystem.geometry.attributes.position.needsUpdate = true;
+                rainSystem.rotation.y += 0.0005;
+            }
+
+            // 2. Central Heart Animation (Solid Mesh)
+            if (centralHeartMesh) {
+                // Heartbeat
+                const beat = config.heartBeatSpeed;
+                const t = time * beat * 3;
+                let scaleBase = 15; // Base scale size
+                let scaleMod = 1 + 0.1 * Math.pow(Math.sin(t), 63);
+                scaleMod += 0.05 * Math.pow(Math.sin(t + 0.4), 63);
+                
+                const finalScale = scaleBase * scaleMod;
+                centralHeartMesh.scale.set(finalScale, finalScale, finalScale);
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
